@@ -62,6 +62,33 @@ public class MainActivity extends SDLActivity{
 
         setupControllerOverlay();
         attachController();
+
+        // Thor Dual Screen: gear/quest/map companion on the second display (if there is one)
+        thorCompanion = new ThorCompanion(this);
+        thorCompanion.start();
+    }
+
+    private ThorCompanion thorCompanion;
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (thorCompanion != null) thorCompanion.start();
+    }
+
+    @Override
+    protected void onStop() {
+        // Leave the companion up through onPause (the bottom screen stays visible while the
+        // game window is merely unfocused); tear it down only when we're really backgrounded.
+        if (thorCompanion != null) thorCompanion.stop();
+        super.onStop();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (thorCompanion != null) thorCompanion.destroy();
+        thorCompanion = null;
+        super.onDestroy();
     }
 
     public static void waitForSetupFromNative() {

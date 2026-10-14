@@ -16,12 +16,12 @@ android {
     }
     defaultConfig {
         if (buildAsApplication) {
-            applicationId "com.dishii.soh"
+            applicationId "com.dishii.soh.thor" // separate install from stock SoH Android
         }
         minSdkVersion 24
         targetSdkVersion 33
         versionCode 8
-        versionName "9.0.2"
+        versionName "9.0.2-thor1"
     }
     buildTypes {
         debug {
@@ -56,7 +56,7 @@ android {
             def versionName = variant.versionName
             def versionCode = variant.versionCode
 
-            def newApkName = "soh_${buildType}_v${versionName}.apk"
+            def newApkName = "soh_dualscreen_${buildType}_v${versionName}.apk"
             outputFileName = newApkName
         }
     }

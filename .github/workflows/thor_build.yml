@@ -1,0 +1,37 @@
+name: Thor Dual Screen APK
+
+# Builds the release APK on every push and on demand (Actions tab -> Run workflow).
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android/sdk/ndk/2* || true
+          df -h
+
+      - name: Point Gradle at the container's SDK and CMake
+        run: |
+          printf 'sdk.dir=/opt/android-studio\ncmake.dir=/usr/local\n' > local.properties
+
+      - name: Setup and build (same container as upstream)
+        run: |
+          cd docker
+          make setup || make create_container
+          make build_release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: soh-dualscreen-apk
+          path: Android/app/build/outputs/apk/release/*.apk
