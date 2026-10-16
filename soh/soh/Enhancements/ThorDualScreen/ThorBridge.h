@@ -56,7 +56,13 @@ enum ThorSnap {
     TS_LAST_RESULT = 137,
     TS_LAST_RESULT_SEQ = 138,
     TS_STATE_FLAGS2 = 139,
-    TS_END = 140
+    TS_MAP_REVISION = 140,
+    TS_MAP_FLAGS = 141, // bit 0: available, bit 1: mirrored world
+    TS_MAP_X = 142, // normalized texture coordinates, 100000 = full width/height
+    TS_MAP_Y = 143,
+    TS_MAP_ROOM = 144,
+    TS_MAP_FLOOR = 145, // game floor icon id: 8 = 1F, 9 = B1
+    TS_END = 146
 };
 
 enum ThorFlags {

@@ -51,6 +51,7 @@ public final class ThorBridge {
 
     private ThorBridge() {}
 
+    static native int[] nativeGetMap();
     static native int nativeSnapshotVersion();
     static native int nativeGetSnapshot(int[] out);
     static native void nativeCommand(int type, int a, int b);

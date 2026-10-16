@@ -3,6 +3,7 @@ package com.dishii.soh;
 import android.app.Activity;
 import android.app.Presentation;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.hardware.display.DisplayManager;
 import android.os.Bundle;
 import android.os.Handler;
@@ -34,6 +35,8 @@ public final class ThorCompanion implements DisplayManager.DisplayListener, Thor
 
     private CompanionPresentation presentation;
     private boolean running;
+    private int mapRevision = -1;
+    private Bitmap mapBitmap;
 
     private final Runnable poll = new Runnable() {
         @Override
@@ -73,6 +76,16 @@ public final class ThorCompanion implements DisplayManager.DisplayListener, Thor
         int frame = ThorBridge.getSnapshot(buffer);
         if (frame < 0) return;
         boolean changed = state.copyFrom(buffer);
+        if (state.mapRevision() != mapRevision) {
+            int[] data = ThorBridge.nativeGetMap();
+            if (data != null && data.length >= 3 && data[0] == state.mapRevision()) {
+                mapRevision = data[0];
+                int width = data[1], height = data[2];
+                mapBitmap = width > 0 && height > 0 && data.length == 3 + width * height
+                        ? Bitmap.createBitmap(data, 3, width, width, height, Bitmap.Config.ARGB_8888) : null;
+            }
+        }
+        if (presentation != null) presentation.view.setMap(mapBitmap, mapRevision);
         if (state.saveLoaded() && !icons.isLoaded()) {
             icons.loadAsync(this);
         }
@@ -111,6 +124,7 @@ public final class ThorCompanion implements DisplayManager.DisplayListener, Thor
         }
         try {
             presentation = new CompanionPresentation(activity, target, state, icons);
+            presentation.view.setMap(mapBitmap, mapRevision);
             presentation.show();
             Log.i(TAG, "Companion on display " + target.getDisplayId() + " (" + target.getName() + ")");
         } catch (WindowManager.InvalidDisplayException e) {

@@ -61,6 +61,16 @@ public class ThorScreenView extends View {
     private final RectF tmpF = new RectF();
     private final Rect tmp = new Rect();
 
+    private Bitmap mapBitmap;
+    private int mapRevision = -1;
+    private boolean dungeonTable;
+    private final RectF mapToggle = new RectF();
+
+    public void setMap(Bitmap bitmap, int revision) {
+        mapBitmap = bitmap;
+        mapRevision = revision;
+    }
+
     private int tab = TAB_GEAR;
     private float u; // layout unit
 
@@ -309,6 +319,8 @@ public class ThorScreenView extends View {
         textPaint.setTextSize(u * 3.6f);
         textPaint.setColor(TEXT);
         String area = GameData.sceneName(state.scene(), state.isAdult());
+        float areaWidth = header.width() * 0.52f - pad;
+        fitText(area, u * 3.6f, areaWidth);
         c.drawText(area, header.right - pad, header.top + u * 5, textPaint);
 
         textPaint.setTextSize(u * 3.2f);
@@ -350,7 +362,7 @@ public class ThorScreenView extends View {
                 c.drawRoundRect(tabRects[i], u * 2, u * 2, paint);
                 paint.setStyle(Paint.Style.FILL);
             }
-            drawCentered(c, TAB_NAMES[i], tabRects[i].centerY() + u * 1.4f, u * 3.6f, on ? GOLD : TEXT_DIM);
+            drawCentered(c, TAB_NAMES[i], tabRects[i].centerY() + u * 1.4f, u * 3.6f, on ? GOLD : TEXT_DIM, tabRects[i].centerX());
         }
     }
 
@@ -484,9 +496,9 @@ public class ThorScreenView extends View {
     private static String buttonLabel(int button) {
         switch (button) {
             case 0: return "B";
-            case 1: return "◀";
-            case 2: return "▼";
-            case 3: return "▶";
+            case 1: return "X";
+            case 2: return "Y";
+            case 3: return "RB";
             case 4: return "D↑";
             case 5: return "D↓";
             case 6: return "D←";
@@ -526,7 +538,7 @@ public class ThorScreenView extends View {
         paint.setColor(color);
         c.drawOval(tmpF, paint);
         textPaint.setTextAlign(Paint.Align.CENTER);
-        textPaint.setTextSize(bs * 0.55f);
+        textPaint.setTextSize(bs * (i == 3 ? 0.46f : 0.55f));
         textPaint.setColor(0xFF101010);
         c.drawText(buttonLabel(i), tmpF.centerX(), tmpF.centerY() + bs * 0.2f, textPaint);
         textPaint.setTextAlign(Paint.Align.LEFT);
@@ -597,8 +609,10 @@ public class ThorScreenView extends View {
         }
         textPaint.setTextSize(u * 3f);
         textPaint.setColor(TEXT);
-        String ocText = playing ? "Playing..." : (ocarinaButton >= 0 ? "Take out" : "Put ocarina on C");
-        c.drawText(ocText, ocarinaRect.left + ocarinaRect.height() + u, ocarinaRect.centerY() + u, textPaint);
+        String ocText = playing ? "Playing..." : (ocarinaButton >= 0 ? "Take out" : "Assign ocarina");
+        float ocX = ocarinaRect.left + ocarinaRect.height() + u;
+        fitText(ocText, u * 3f, ocarinaRect.right - ocX - u);
+        c.drawText(ocText, ocX, ocarinaRect.centerY() - (textPaint.ascent() + textPaint.descent()) / 2, textPaint);
 
         // Songs
         for (int i = 0; i < 12; i++) drawSong(c, i, playing);
@@ -646,19 +660,20 @@ public class ThorScreenView extends View {
                 c.drawCircle(tmpF.centerX(), tmpF.centerY(), ns * 0.3f, paint);
             }
         }
-        textPaint.setTextSize(h * 0.36f);
+        textPaint.setTextSize(h * 0.30f);
         textPaint.setColor(has ? TEXT : TEXT_DIM);
         String name = has ? GameData.SONG_NAMES[i] : "???";
         float tx = tmpF.right + u * 1.2f;
-        c.drawText(name, tx, r.centerY() + h * 0.13f, textPaint);
+        fitText(name, h * 0.30f, r.right - tx - u);
+        c.drawText(name, tx, r.top + h * 0.39f, textPaint);
 
         // Notes on the right
         if (has || sel) {
             String notes = GameData.SONG_NOTES[i];
-            float noteS = h * 0.55f;
-            float nx = r.right - u - notes.length() * noteS * 1.05f;
+            float noteS = h * 0.33f;
+            float nx = tx;
             for (int k = 0; k < notes.length(); k++) {
-                drawNote(c, notes.charAt(k), nx + k * noteS * 1.05f + noteS / 2, r.centerY(), noteS);
+                drawNote(c, notes.charAt(k), nx + k * noteS * 1.05f + noteS / 2, r.top + h * 0.73f, noteS);
             }
         }
     }
@@ -700,99 +715,106 @@ public class ThorScreenView extends View {
 
     private void drawMap(Canvas c) {
         float pad = u * 2;
-        int scene = state.scene();
-        int dungeon = GameData.dungeonForScene(scene);
-
-        // Area card
-        tmpF.set(content.left + pad, content.top + pad, content.right - pad, content.top + content.height() * 0.38f);
-        drawPanel(c, tmpF);
-        RectF card = new RectF(tmpF);
-
-        textPaint.setTextSize(u * 5f);
-        textPaint.setColor(GOLD);
-        c.drawText(GameData.sceneName(scene, state.isAdult()), card.left + pad * 1.5f, card.top + u * 7.5f, textPaint);
-        textPaint.setTextSize(u * 3.2f);
-        textPaint.setColor(TEXT_DIM);
-        String sub = "Room " + state.room() + (state.sceneIsMq() ? "  •  Master Quest" : "")
-                + "  •  " + (state.isAdult() ? "Adult" : "Child");
-        c.drawText(sub, card.left + pad * 1.5f, card.top + u * 12f, textPaint);
-
-        // Compass
-        float cr = card.height() * 0.36f;
-        float ccx = card.right - cr - pad * 2, ccy = card.centerY();
-        paint.setColor(0xFF0A1420);
-        c.drawCircle(ccx, ccy, cr, paint);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(u * 0.4f);
-        paint.setColor(GOLD_DIM);
-        c.drawCircle(ccx, ccy, cr, paint);
-        paint.setStyle(Paint.Style.FILL);
-        drawCentered(c, "N", ccy - cr + u * 3.2f, u * 2.8f, GOLD, ccx);
-        double yaw = state.yaw() * Math.PI * 2 / 65536.0;
-        float dx = (float) Math.sin(yaw), dy = (float) Math.cos(yaw);
-        float tipX = ccx + dx * cr * 0.75f, tipY = ccy + dy * cr * 0.75f;
-        float bx = ccx - dx * cr * 0.35f, by = ccy - dy * cr * 0.35f;
-        float px = -dy * cr * 0.22f, py = dx * cr * 0.22f;
-        path.reset();
-        path.moveTo(tipX, tipY);
-        path.lineTo(bx + px, by + py);
-        path.lineTo(ccx - dx * cr * 0.15f, ccy - dy * cr * 0.15f);
-        path.lineTo(bx - px, by - py);
-        path.close();
-        paint.setColor(B_GREEN);
-        c.drawPath(path, paint);
-
-        // Current dungeon items
-        if (dungeon >= 0) {
-            float is = card.height() * 0.32f;
-            float ix = card.left + pad * 1.5f, iy = card.bottom - is - pad;
-            drawDungeonIcon(c, ix, iy, is, GameData.ITEM_DUNGEON_MAP, GameData.dungeonHasMapCompass(dungeon) && state.hasMap(dungeon), GameData.dungeonHasMapCompass(dungeon));
-            drawDungeonIcon(c, ix + is * 1.2f, iy, is, GameData.ITEM_COMPASS, GameData.dungeonHasMapCompass(dungeon) && state.hasCompass(dungeon), GameData.dungeonHasMapCompass(dungeon));
-            drawDungeonIcon(c, ix + is * 2.4f, iy, is, GameData.ITEM_KEY_BOSS, GameData.dungeonHasBossKey(dungeon) && state.hasBossKey(dungeon), GameData.dungeonHasBossKey(dungeon));
-            if (GameData.dungeonHasSmallKeys(dungeon)) {
-                drawDungeonIcon(c, ix + is * 3.6f, iy, is, GameData.ITEM_KEY_SMALL, true, true);
-                textPaint.setTextSize(is * 0.45f);
-                textPaint.setColor(TEXT);
-                c.drawText("×" + Math.max(0, state.dungeonKeys(dungeon)), ix + is * 4.65f, iy + is * 0.7f, textPaint);
-            }
+        mapToggle.set(content.right - pad - u * 23, content.top + pad,
+                content.right - pad, content.top + u * 9);
+        paint.setColor(PANEL);
+        c.drawRoundRect(mapToggle, u * 1.4f, u * 1.4f, paint);
+        drawCentered(c, dungeonTable ? "LIVE MAP" : "DUNGEONS",
+                mapToggle.centerY() + u, u * 2.7f, GOLD, mapToggle.centerX());
+        String area = GameData.sceneName(state.scene(), state.isAdult());
+        drawFittedText(c, area, content.left + pad, content.top + u * 6.5f,
+                mapToggle.left - content.left - pad * 2, u * 4f, GOLD);
+        float top = content.top + u * 11;
+        if (dungeonTable) {
+            drawDungeonTable(c, top);
+            return;
         }
+        RectF card = new RectF(content.left + pad, top, content.right - pad, content.bottom - u * 10);
+        drawPanel(c, card);
+        if (state.hasLiveMap() && mapBitmap != null && mapRevision == state.mapRevision()) {
+            float margin = u * 4;
+            float scale = Math.min((card.width() - margin * 2) / mapBitmap.getWidth(),
+                    (card.height() - margin * 2) / mapBitmap.getHeight());
+            float width = mapBitmap.getWidth() * scale, height = mapBitmap.getHeight() * scale;
+            RectF map = new RectF(card.centerX() - width / 2, card.centerY() - height / 2,
+                    card.centerX() + width / 2, card.centerY() + height / 2);
+            c.save();
+            c.clipRect(card);
+            if (state.mapMirrored()) {
+                c.save();
+                c.scale(-1, 1, map.centerX(), map.centerY());
+                c.drawBitmap(mapBitmap, null, map, iconPaint);
+                c.restore();
+            } else {
+                c.drawBitmap(mapBitmap, null, map, iconPaint);
+            }
+            // Position is normalized against the original map dimensions, so texture packs scale too.
+            float x = map.left + state.mapX() * map.width();
+            float y = map.top + state.mapY() * map.height();
+            double yaw = state.yaw() * Math.PI * 2 / 65536.0;
+            float dx = (float)Math.sin(yaw) * (state.mapMirrored() ? -1 : 1);
+            float dy = (float)Math.cos(yaw);
+            float radius = u * 2.2f;
+            path.reset();
+            path.moveTo(x + dx * radius, y + dy * radius);
+            path.lineTo(x - dx * radius * 0.7f - dy * radius * 0.65f,
+                    y - dy * radius * 0.7f + dx * radius * 0.65f);
+            path.lineTo(x - dx * radius * 0.35f, y - dy * radius * 0.35f);
+            path.lineTo(x - dx * radius * 0.7f + dy * radius * 0.65f,
+                    y - dy * radius * 0.7f - dx * radius * 0.65f);
+            path.close();
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(u * 0.65f);
+            paint.setColor(0xFF07101C);
+            c.drawPath(path, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xFFCCFF55);
+            c.drawPath(path, paint);
+            c.restore();
+        } else {
+            drawCentered(c, state.hasLiveMap() ? "Loading map…" : "No map for this area",
+                    card.centerY(), u * 3.6f, TEXT_DIM, card.centerX());
+        }
+        String room = "Room " + state.room();
+        if (GameData.dungeonHasMapCompass(GameData.dungeonForScene(state.scene()))
+                && GameData.dungeonForScene(state.scene()) >= 0) room += "  ·  " + state.mapFloor();
+        if (state.sceneIsMq()) room += "  ·  Master Quest";
+        drawFittedText(c, room, content.left + pad, content.bottom - u * 3.8f,
+                content.width() * 0.62f, u * 3f, TEXT_DIM);
+        drawFittedText(c, "▲ Link", content.right - u * 19, content.bottom - u * 3.8f,
+                u * 17, u * 3f, 0xFFCCFF55);
+    }
 
-        // Dungeon table, two columns of seven
-        float top = card.bottom + pad;
+    private void drawDungeonTable(Canvas c, float top) {
+        float pad = u * 2;
         float rowH = (content.bottom - pad - top) / 7f;
         float colW = (content.width() - pad * 3) / 2f;
+        int dungeon = GameData.dungeonForScene(state.scene());
         for (int d = 0; d < 14; d++) {
             int col = d / 7, row = d % 7;
             float x = content.left + pad + col * (colW + pad);
             float y = top + row * rowH;
-            tmpF.set(x, y + rowH * 0.06f, x + colW, y + rowH * 0.94f);
-            boolean here = d == dungeon;
-            paint.setColor(here ? 0xFF22406A : PANEL);
-            c.drawRoundRect(tmpF, u * 1.2f, u * 1.2f, paint);
-            textPaint.setTextSize(rowH * 0.32f);
-            textPaint.setColor(here ? GOLD : TEXT);
-            c.drawText(GameData.DUNGEON_NAMES[d], x + u * 1.5f, tmpF.centerY() + rowH * 0.11f, textPaint);
-
-            float s = rowH * 0.55f;
-            float ex = x + colW - u;
-            if (GameData.dungeonHasSmallKeys(d)) {
-                textPaint.setTextAlign(Paint.Align.RIGHT);
-                textPaint.setTextSize(rowH * 0.3f);
-                textPaint.setColor(state.dungeonKeys(d) > 0 ? TEXT : TEXT_DIM);
-                c.drawText("×" + Math.max(0, state.dungeonKeys(d)), ex, tmpF.centerY() + rowH * 0.1f, textPaint);
-                textPaint.setTextAlign(Paint.Align.LEFT);
-                ex -= s * 1.4f;
-                drawMini(c, ex, tmpF.centerY(), s, GameData.ITEM_KEY_SMALL, true);
-                ex -= s * 1.1f;
+            RectF cell = new RectF(x, y + rowH * 0.06f, x + colW, y + rowH * 0.94f);
+            paint.setColor(d == dungeon ? 0xFF22406A : PANEL);
+            c.drawRoundRect(cell, u * 1.2f, u * 1.2f, paint);
+            drawFittedText(c, GameData.DUNGEON_NAMES[d], x + u * 1.5f, y + rowH * 0.33f,
+                    colW - u * 3, rowH * 0.27f, d == dungeon ? GOLD : TEXT);
+            float size = rowH * 0.4f, cx = x + u * 1.5f + size / 2;
+            float cy = y + rowH * 0.66f;
+            if (GameData.dungeonHasMapCompass(d)) {
+                drawMini(c, cx, cy, size, GameData.ITEM_DUNGEON_MAP, state.hasMap(d));
+                cx += size * 1.3f;
+                drawMini(c, cx, cy, size, GameData.ITEM_COMPASS, state.hasCompass(d));
+                cx += size * 1.3f;
             }
             if (GameData.dungeonHasBossKey(d)) {
-                drawMini(c, ex, tmpF.centerY(), s, GameData.ITEM_KEY_BOSS, state.hasBossKey(d));
-                ex -= s * 1.1f;
+                drawMini(c, cx, cy, size, GameData.ITEM_KEY_BOSS, state.hasBossKey(d));
+                cx += size * 1.3f;
             }
-            if (GameData.dungeonHasMapCompass(d)) {
-                drawMini(c, ex, tmpF.centerY(), s, GameData.ITEM_COMPASS, state.hasCompass(d));
-                ex -= s * 1.1f;
-                drawMini(c, ex, tmpF.centerY(), s, GameData.ITEM_DUNGEON_MAP, state.hasMap(d));
+            if (GameData.dungeonHasSmallKeys(d)) {
+                drawMini(c, cx, cy, size, GameData.ITEM_KEY_SMALL, true);
+                drawFittedText(c, "×" + Math.max(0, state.dungeonKeys(d)), cx + size * 0.7f,
+                        cy + size * 0.25f, cell.right - cx - size, size * 0.7f, TEXT);
             }
         }
     }
@@ -916,6 +938,19 @@ public class ThorScreenView extends View {
         c.drawPath(path, paint);
     }
 
+    private void fitText(String text, float size, float width) {
+        textPaint.setTextSize(size);
+        float measured = textPaint.measureText(text);
+        if (measured > width && measured > 0) textPaint.setTextSize(size * Math.max(0, width) / measured);
+    }
+
+    private void drawFittedText(Canvas c, String text, float x, float baseline, float width, float size, int color) {
+        textPaint.setTextAlign(Paint.Align.LEFT);
+        textPaint.setColor(color);
+        fitText(text, size, width);
+        c.drawText(text, x, baseline, textPaint);
+    }
+
     private void drawCentered(Canvas c, String s, float baseline, float size, int color) {
         drawCentered(c, s, baseline, size, color, getWidth() / 2f);
     }
@@ -992,6 +1027,12 @@ public class ThorScreenView extends View {
                         }
                         return true;
                     }
+                }
+                if (tab == TAB_MAP && mapToggle.contains(x, y)) {
+                    dungeonTable = !dungeonTable;
+                    performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                    invalidate();
+                    return true;
                 }
                 if (tab == TAB_GEAR) {
                     downSlot = hitSlot(x, y);

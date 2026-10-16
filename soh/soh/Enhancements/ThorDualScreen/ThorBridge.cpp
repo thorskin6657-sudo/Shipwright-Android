@@ -24,6 +24,7 @@
 extern "C" {
 #include "z64.h"
 #include "macros.h"
+#include "regs.h"
 #include "variables.h"
 #include "functions.h"
 extern PlayState* gPlayState;
@@ -44,6 +45,14 @@ struct Command {
 
 std::mutex sSnapMutex;
 std::array<int32_t, THOR_SNAPSHOT_SIZE> sSnapshot{};
+// Decoded only on the game thread when the current map changes. JNI only copies it.
+std::vector<uint32_t> sMapPixels;
+int sMapWidth = 0, sMapHeight = 0, sMapRevision = 0;
+std::string sMapKey;
+int sMapScene = -1;
+bool sMapMq = false;
+bool DecodeTexture(const char* path, int& outW, int& outH, std::vector<uint32_t>& out);
+
 
 std::mutex sCmdMutex;
 std::deque<Command> sCommands;
@@ -291,6 +300,64 @@ void ApplyCommand(const Command& c) {
     sLastResultSeq++;
 }
 
+void PublishMap(std::array<int32_t, THOR_SNAPSHOT_SIZE>& snapshot, bool inGame) {
+    const int scene = inGame ? gPlayState->sceneNum : -1;
+    const bool overworld = scene >= SCENE_HYRULE_FIELD && scene <= SCENE_OUTSIDE_GANONS_CASTLE;
+    const bool dungeon = (scene >= SCENE_DEKU_TREE && scene <= SCENE_ICE_CAVERN) ||
+                         (scene >= SCENE_DEKU_TREE_BOSS && scene <= SCENE_SHADOW_TEMPLE_BOSS);
+    const char* texture = nullptr;
+    if (inGame && gMapData != nullptr && (overworld || dungeon)) {
+        texture = gPlayState->interfaceCtx.mapSegmentName[0];
+    }
+    const char* key = texture == nullptr ? "" : texture;
+    const bool mq = texture != nullptr && ResourceMgr_IsSceneMasterQuest(scene);
+    if (sMapKey != key || sMapScene != scene || sMapMq != mq ||
+        (texture != nullptr && sMapWidth == 0 && sFrame % 60 == 0)) {
+        int width = 0, height = 0;
+        std::vector<uint32_t> pixels;
+        try {
+            if (texture == nullptr || !DecodeTexture(texture, width, height, pixels)) {
+                width = height = 0;
+                pixels.clear();
+            }
+        } catch (...) {
+            width = height = 0;
+            pixels.clear();
+        }
+        std::lock_guard<std::mutex> lock(sSnapMutex);
+        sMapKey = key;
+        sMapScene = scene;
+        sMapMq = mq;
+        sMapWidth = width;
+        sMapHeight = height;
+        sMapPixels.swap(pixels);
+        ++sMapRevision;
+    }
+    snapshot[TS_MAP_REVISION] = sMapRevision;
+    if (texture == nullptr || sMapWidth <= 0 || R_COMPASS_SCALE_X == 0 || R_COMPASS_SCALE_Y == 0) return;
+    Player* player = GET_PLAYER(gPlayState);
+    if (player == nullptr) return;
+    const int mapIndex = gSaveContext.mapIndex;
+    if (overworld && (mapIndex < 0 || mapIndex >= 20)) return;
+    const float width = overworld ? gMapData->owMinimapWidth[mapIndex] : 96.0f;
+    const float height = overworld ? gMapData->owMinimapHeight[mapIndex] : 85.0f;
+    if (width <= 0 || height <= 0) return;
+    const float left = overworld ? R_OW_MINIMAP_X : R_DGN_MINIMAP_X;
+    const float top = overworld ? R_OW_MINIMAP_Y : R_DGN_MINIMAP_Y;
+    // Same transform as Minimap_DrawCompassIcons, expressed in texture-local pixels.
+    // Ignore HUD positioning and widescreen margins: these belong to the main screen.
+    float x = (R_COMPASS_OFFSET_X + player->actor.world.pos.x / R_COMPASS_SCALE_X) / 10.0f + 160.0f - left;
+    const float y = 120.0f - top - (R_COMPASS_OFFSET_Y - player->actor.world.pos.z / R_COMPASS_SCALE_Y) / 10.0f;
+    const bool mirror = CVarGetInteger(CVAR_ENHANCEMENT("MirroredWorld"), 0) != 0;
+    if (mirror) x = width - x;
+    snapshot[TS_MAP_FLAGS] = 1 | (mirror ? 2 : 0);
+    snapshot[TS_MAP_X] = (int32_t)std::lround(x / width * 100000.0f);
+    snapshot[TS_MAP_Y] = (int32_t)std::lround(y / height * 100000.0f);
+    snapshot[TS_MAP_ROOM] = gPlayState->interfaceCtx.mapRoomNum;
+    snapshot[TS_MAP_FLOOR] = dungeon && mapIndex >= 0 && mapIndex < 10 && VREG(30) >= 0 && VREG(30) < 8
+        ? gMapData->floorID[mapIndex][VREG(30)] : 0;
+}
+
 void PublishSnapshot() {
     std::array<int32_t, THOR_SNAPSHOT_SIZE> s{};
     s[TS_VERSION] = THOR_SNAPSHOT_VERSION;
@@ -382,6 +449,7 @@ void PublishSnapshot() {
         }
     }
 
+    PublishMap(s, inGame);
     std::lock_guard<std::mutex> lock(sSnapMutex);
     sSnapshot = s;
 }
@@ -593,6 +661,19 @@ JNIEXPORT jint JNICALL Java_com_dishii_soh_ThorBridge_nativeGetSnapshot(JNIEnv* 
     }
     env->SetIntArrayRegion(out, 0, THOR_SNAPSHOT_SIZE, reinterpret_cast<const jint*>(copy.data()));
     return copy[TS_FRAME];
+}
+
+// {revision, width, height, ARGB...}; map game-memory access stays on the game thread.
+JNIEXPORT jintArray JNICALL Java_com_dishii_soh_ThorBridge_nativeGetMap(JNIEnv* env, jclass) {
+    std::lock_guard<std::mutex> lock(sSnapMutex);
+    jintArray result = env->NewIntArray(3 + sMapPixels.size());
+    if (result == nullptr) return nullptr;
+    const jint header[] = { sMapRevision, sMapWidth, sMapHeight };
+    env->SetIntArrayRegion(result, 0, 3, header);
+    if (!sMapPixels.empty()) {
+        env->SetIntArrayRegion(result, 3, sMapPixels.size(), reinterpret_cast<const jint*>(sMapPixels.data()));
+    }
+    return result;
 }
 
 JNIEXPORT void JNICALL Java_com_dishii_soh_ThorBridge_nativeCommand(JNIEnv*, jclass, jint type, jint a, jint b) {

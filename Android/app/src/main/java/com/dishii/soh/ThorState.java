@@ -52,6 +52,19 @@ public final class ThorState {
     static final int TS_LAST_RESULT_SEQ = 138;
     static final int TS_STATE_FLAGS2 = 139;
 
+    static final int TS_MAP_REVISION = 140, TS_MAP_FLAGS = 141, TS_MAP_X = 142,
+            TS_MAP_Y = 143, TS_MAP_ROOM = 144, TS_MAP_FLOOR = 145;
+
+    public int mapRevision() { return raw[TS_MAP_REVISION]; }
+    public boolean hasLiveMap() { return (raw[TS_MAP_FLAGS] & 1) != 0; }
+    public boolean mapMirrored() { return (raw[TS_MAP_FLAGS] & 2) != 0; }
+    public float mapX() { return raw[TS_MAP_X] / 100000f; }
+    public float mapY() { return raw[TS_MAP_Y] / 100000f; }
+    public String mapFloor() {
+        int floor = raw[TS_MAP_FLOOR];
+        return floor == 0 ? "" : floor <= 8 ? (9 - floor) + "F" : "B" + (floor - 8);
+    }
+
     static final int TF_SAVE_LOADED = 1;
     static final int TF_PAUSED = 1 << 1;
     static final int TF_BLOCKING_CS = 1 << 2;
