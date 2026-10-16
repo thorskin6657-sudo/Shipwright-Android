@@ -53,6 +53,7 @@ public class MainActivity extends SDLActivity{
         // Check if storage permissions are granted
         if (hasStoragePermission()) {
             doVersionCheck();
+            ThorControllerSetup.apply(this, preferences);
             checkAndSetupFiles();
         } else {
             requestStoragePermission();
@@ -60,8 +61,7 @@ public class MainActivity extends SDLActivity{
 
         super.onCreate(savedInstanceState);
 
-        setupControllerOverlay();
-        attachController();
+        // Thor has physical controls; do not create the touch overlay or its virtual controller.
 
         // Thor Dual Screen: gear/quest/map companion on the second display (if there is one)
         thorCompanion = new ThorCompanion(this);
