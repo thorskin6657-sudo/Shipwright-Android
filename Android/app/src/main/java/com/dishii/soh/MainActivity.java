@@ -100,13 +100,16 @@ public class MainActivity extends SDLActivity{
     }
 
     private void doVersionCheck(){
-        int currentVersion = BuildConfig.VERSION_CODE;
-        int storedVersion = preferences.getInt("appVersion", 1);
-
-        if (currentVersion > storedVersion) {
+        // All Thor companion revisions still use upstream 9.0.2's asset format (revision 8).
+        // UI/APK version bumps must not delete a working game's OTR files.
+        final int assetVersion = 8;
+        int legacyVersion = preferences.getInt("appVersion", 1);
+        int storedVersion = preferences.getInt("assetVersion", legacyVersion >= assetVersion ? assetVersion : 1);
+        if (assetVersion > storedVersion) {
             deleteOutdatedAssets();
-            preferences.edit().putInt("appVersion", currentVersion).apply();
         }
+        preferences.edit().putInt("assetVersion", assetVersion)
+                .putInt("appVersion", BuildConfig.VERSION_CODE).apply();
     }
 
     private void deleteOutdatedAssets() {
