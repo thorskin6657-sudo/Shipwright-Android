@@ -1179,6 +1179,19 @@ public class ThorScreenView extends View {
                 }
                 return true;
 
+            case MotionEvent.ACTION_POINTER_DOWN:
+                lastTouchX = x;
+                lastTouchY = y;
+                return true;
+
+            case MotionEvent.ACTION_POINTER_UP:
+                if (mapTouch && e.getPointerCount() > 1) {
+                    int remaining = e.getActionIndex() == 0 ? 1 : 0;
+                    lastTouchX = e.getX(remaining);
+                    lastTouchY = e.getY(remaining);
+                }
+                return true;
+
             case MotionEvent.ACTION_MOVE:
                 if (trackerTouch) {
                     trackerScroll += lastTouchY - y;

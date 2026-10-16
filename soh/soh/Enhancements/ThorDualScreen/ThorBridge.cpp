@@ -405,7 +405,7 @@ bool HeartLocationCollected(const Rando::Location& location) {
     }
     // Vanilla minigames/scrubs can use a different raw flag from their randomizer definition.
     if (location.GetRandomizerCheck() == RC_HF_DEKU_SCRUB_GROTTO && GET_ITEMGETINF(ITEMGETINF_DEKU_SCRUB_HEART_PIECE)) return true;
-    if (location.GetRandomizerCheck() == RC_LH_CHILD_FISHING && (HIGH_SCORE(HS_FISHING) & 0x400)) return true;
+    if (location.GetRandomizerCheck() == RC_LH_CHILD_FISHING && (HIGH_SCORE(HS_FISHING) & HS_FISH_PRIZE_CHILD)) return true;
     const auto context = Rando::Context::GetInstance();
     if (context != nullptr) {
         const auto status = context->GetItemLocation(location.GetRandomizerCheck())->GetCheckStatus();
@@ -430,7 +430,8 @@ void PublishCollectibles(std::array<int32_t, THOR_SNAPSHOT_SIZE>& snapshot, bool
     static std::vector<RandomizerCheck> heartLocations;
     if (heartLocations.empty()) {
         for (const auto& location : Rando::StaticData::GetLocationTable()) {
-            if (location.GetVanillaItem() == RG_PIECE_OF_HEART) heartLocations.push_back(location.GetRandomizerCheck());
+            if (location.GetVanillaItem() == RG_PIECE_OF_HEART || location.GetVanillaItem() == RG_TREASURE_GAME_HEART)
+                heartLocations.push_back(location.GetRandomizerCheck());
         }
     }
     for (const auto check : heartLocations) {
