@@ -35,6 +35,7 @@ public final class ThorCompanion implements DisplayManager.DisplayListener, Thor
 
     private CompanionPresentation presentation;
     private boolean running;
+    private boolean mainMapHidden;
     private int mapRevision = -1;
     private Bitmap mapBitmap;
 
@@ -76,6 +77,11 @@ public final class ThorCompanion implements DisplayManager.DisplayListener, Thor
         int frame = ThorBridge.getSnapshot(buffer);
         if (frame < 0) return;
         boolean changed = state.copyFrom(buffer);
+        if (!mainMapHidden && state.valid()) {
+            // Keep navigation on the companion; this cosmetic hides only the main-screen HUD map.
+            ThorBridge.setCVar("gCosmetics.HUD.Minimap.PosType", 4);
+            mainMapHidden = true;
+        }
         if (state.mapRevision() != mapRevision) {
             int[] data = ThorBridge.nativeGetMap();
             if (data != null && data.length >= 3 && data[0] == state.mapRevision()) {

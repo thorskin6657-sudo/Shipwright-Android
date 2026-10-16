@@ -154,7 +154,7 @@ public class ThorScreenView extends View {
     @Override
     protected void onSizeChanged(int w, int h, int ow, int oh) {
         u = Math.min(w, h) / 100f;
-        float headerH = h * 0.12f;
+        float headerH = h * 0.15f;
         float tabH = h * 0.09f;
         header.set(0, 0, w, headerH);
         tabBar.set(0, h - tabH, w, h);
@@ -321,20 +321,20 @@ public class ThorScreenView extends View {
         String area = GameData.sceneName(state.scene(), state.isAdult());
         float areaWidth = header.width() * 0.52f - pad;
         fitText(area, u * 3.6f, areaWidth);
-        c.drawText(area, header.right - pad, header.top + u * 5, textPaint);
+        c.drawText(area, header.right - pad, header.top + u * 4.5f, textPaint);
 
         textPaint.setTextSize(u * 3.2f);
         int wallet = state.walletCapacity();
         textPaint.setColor(state.rupees() >= wallet ? 0xFF7CFC9A : TEXT);
         String rupees = state.rupees() + " / " + wallet;
         float rx = header.right - pad;
-        c.drawText(rupees, rx, header.top + u * 9.6f, textPaint);
+        c.drawText(rupees, rx, header.top + u * 12.2f, textPaint);
         float rw = textPaint.measureText(rupees);
-        drawRupee(c, rx - rw - u * 3, header.top + u * 7.2f, u * 2.4f, walletColor());
+        drawRupee(c, rx - rw - u * 3, header.top + u * 10.8f, u * 1.7f, walletColor());
 
         textPaint.setColor(state.isNight() ? 0xFF9DB4FF : GOLD);
         String clock = (state.isNight() ? "☾ " : "☀ ") + state.clock();
-        c.drawText(clock, rx - rw - u * 7, header.top + u * 9.6f, textPaint);
+        c.drawText(clock, rx - rw - u * 7, header.top + u * 12.2f, textPaint);
         textPaint.setTextAlign(Paint.Align.LEFT);
 
         paint.setColor(PANEL_EDGE);
