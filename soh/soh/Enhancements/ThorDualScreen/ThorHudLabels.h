@@ -1,6 +1,10 @@
 #pragma once
 // Code-drawn IA8 controller glyphs: no replacement game/texture-pack assets.
 #ifdef __ANDROID__
+// z_parameter.c defines this helper below its includes.
+Gfx* Gfx_TextureIA8(Gfx* displayListHead, void* texture, s16 textureWidth, s16 textureHeight,
+                    s16 rectLeft, s16 rectTop, s16 rectWidth, s16 rectHeight, u16 dsdx, u16 dtdy);
+
 static u8 sThorHudLabels[3][32 * 32] __attribute__((aligned(8)));
 static int sThorHudLabelsReady;
 
