@@ -10,7 +10,7 @@ import android.util.Log;
 public final class ThorBridge {
     private static final String TAG = "ThorBridge";
 
-    public static final int SNAPSHOT_SIZE = 160;
+    public static final int SNAPSHOT_SIZE = 256;
 
     // Commands (ThorCmd)
     public static final int CMD_ASSIGN_SLOT = 1;

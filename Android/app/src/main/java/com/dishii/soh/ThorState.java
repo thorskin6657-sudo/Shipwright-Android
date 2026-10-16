@@ -4,7 +4,7 @@ import java.util.Arrays;
 
 /** Read-only view of the native snapshot. Indices mirror ThorBridge.h (ThorSnap). */
 public final class ThorState {
-    public static final int VERSION = 1;
+    public static final int VERSION = 2;
 
     static final int TS_VERSION = 0;
     static final int TS_FLAGS = 1;
@@ -64,6 +64,12 @@ public final class ThorState {
         int floor = raw[TS_MAP_FLOOR];
         return floor == 0 ? "" : floor <= 8 ? (9 - floor) + "F" : "B" + (floor - 8);
     }
+
+    public int tracker(int area, int field) { return raw[146 + area * 4 + field]; }
+    public int trackerArea() { return raw[234]; }
+    public int totalHeartPieces() { return raw[235]; }
+    public int totalHeartContainers() { return raw[236]; }
+    public boolean randomizedTracker() { return raw[237] != 0; }
 
     static final int TF_SAVE_LOADED = 1;
     static final int TF_PAUSED = 1 << 1;

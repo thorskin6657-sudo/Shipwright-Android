@@ -6,8 +6,8 @@
 // Everything that touches game memory runs on the game thread; JNI calls only
 // copy the snapshot or enqueue commands.
 
-#define THOR_SNAPSHOT_VERSION 1
-#define THOR_SNAPSHOT_SIZE 160
+#define THOR_SNAPSHOT_VERSION 2
+#define THOR_SNAPSHOT_SIZE 256
 
 // Snapshot layout (int array). Keep in sync with ThorState.java.
 enum ThorSnap {
@@ -62,7 +62,12 @@ enum ThorSnap {
     TS_MAP_Y = 143,
     TS_MAP_ROOM = 144,
     TS_MAP_FLOOR = 145, // game floor icon id: 8 = 1F, 9 = B1
-    TS_END = 146
+    TS_TRACKER = 146, // 22 areas x {skulls collected,total,heart pieces collected,total}
+    TS_TRACKER_AREA = 234,
+    TS_TOTAL_HEART_PIECES = 235,
+    TS_TOTAL_HEART_CONTAINERS = 236,
+    TS_TRACKER_RANDOMIZED = 237,
+    TS_END = 238
 };
 
 enum ThorFlags {

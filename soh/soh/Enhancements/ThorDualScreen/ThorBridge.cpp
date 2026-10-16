@@ -20,6 +20,9 @@
 #include "soh/ResourceManagerHelpers.h"
 #include "soh/ShipInit.hpp"
 #include "soh/cvar_prefixes.h"
+#include "soh/Enhancements/randomizer/static_data.h"
+#include "soh/Enhancements/randomizer/context.h"
+#include "soh/Enhancements/randomizer/randomizer_check_objects.h"
 
 extern "C" {
 #include "z64.h"
@@ -29,6 +32,7 @@ extern "C" {
 #include "functions.h"
 extern PlayState* gPlayState;
 extern u8 gEquipAgeReqs[][4];
+extern u8 gAreaGsFlags[];
 }
 
 #ifndef AGE_REQ_NONE
@@ -358,6 +362,89 @@ void PublishMap(std::array<int32_t, THOR_SNAPSHOT_SIZE>& snapshot, bool inGame) 
         ? gMapData->floorID[mapIndex][VREG(30)] : 0;
 }
 
+int TrackerArea(RandomizerCheckArea area) {
+    static constexpr int groups[] = {
+        12, 13, 13, 10, 18, 19, 20, 21, 21, 14, 14, 16, 16, 15, 15, 15,
+        17, 17, 17, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, -1, 14
+    };
+    static_assert(ARRAY_COUNT(groups) == RCAREA_INVALID);
+    return area >= 0 && area < RCAREA_INVALID ? groups[area] : -1;
+}
+
+int BitCount(uint32_t flags) {
+    int count = 0;
+    while (flags != 0) { flags &= flags - 1; ++count; }
+    return count;
+}
+
+bool HeartLocationCollected(const Rando::Location& location) {
+    const auto check = location.GetCollectionCheck();
+    const uint32_t bit = check.flag < 32 ? (1u << check.flag) : 0;
+    const bool currentScene = check.scene == gPlayState->sceneNum;
+    switch (check.type) {
+        case SPOILER_CHK_CHEST:
+            if (check.scene < ARRAY_COUNT(gSaveContext.sceneFlags) &&
+                ((gSaveContext.sceneFlags[check.scene].chest |
+                  (currentScene ? gPlayState->actorCtx.flags.chest : 0)) & bit)) return true;
+            break;
+        case SPOILER_CHK_COLLECTABLE:
+            if (check.scene < ARRAY_COUNT(gSaveContext.sceneFlags) &&
+                ((gSaveContext.sceneFlags[check.scene].collect |
+                  (currentScene ? gPlayState->actorCtx.flags.collect : 0)) & bit)) return true;
+            break;
+        case SPOILER_CHK_ITEM_GET_INF:
+            if (check.flag < ARRAY_COUNT(gSaveContext.itemGetInf) * 16 && GET_ITEMGETINF(check.flag)) return true;
+            break;
+        case SPOILER_CHK_EVENT_CHK_INF:
+            if (check.flag < ARRAY_COUNT(gSaveContext.eventChkInf) * 16 && Flags_GetEventChkInf(check.flag)) return true;
+            break;
+        case SPOILER_CHK_INF_TABLE:
+            if (check.flag < ARRAY_COUNT(gSaveContext.infTable) * 16 && Flags_GetInfTable(check.flag)) return true;
+            break;
+        default: break;
+    }
+    // Vanilla minigames/scrubs can use a different raw flag from their randomizer definition.
+    if (location.GetRandomizerCheck() == RC_HF_DEKU_SCRUB_GROTTO && GET_ITEMGETINF(ITEMGETINF_DEKU_SCRUB_HEART_PIECE)) return true;
+    if (location.GetRandomizerCheck() == RC_LH_CHILD_FISHING && (HIGH_SCORE(HS_FISHING) & 0x400)) return true;
+    const auto context = Rando::Context::GetInstance();
+    if (context != nullptr) {
+        const auto status = context->GetItemLocation(location.GetRandomizerCheck())->GetCheckStatus();
+        if (status == RCSHOW_COLLECTED || status == RCSHOW_SAVED) return true;
+    }
+    return false;
+}
+
+void PublishCollectibles(std::array<int32_t, THOR_SNAPSHOT_SIZE>& snapshot, bool inGame) {
+    snapshot[TS_TRACKER_AREA] = -1;
+    if (!inGame) return;
+    static const auto areas = RandomizerCheckObjects::GetAllRCAreaBySceneID();
+    const auto area = areas.find(static_cast<SceneID>(gPlayState->sceneNum));
+    if (area != areas.end()) snapshot[TS_TRACKER_AREA] = TrackerArea(area->second);
+    snapshot[TS_TOTAL_HEART_PIECES] = gSaveContext.ship.stats.heartPieces;
+    snapshot[TS_TOTAL_HEART_CONTAINERS] = gSaveContext.ship.stats.heartContainers;
+    snapshot[TS_TRACKER_RANDOMIZED] = IS_RANDO ? 1 : 0;
+    for (int area = 0; area < 22; ++area) {
+        snapshot[TS_TRACKER + area * 4] = BitCount(GET_GS_FLAGS(area) & gAreaGsFlags[area]);
+        snapshot[TS_TRACKER + area * 4 + 1] = BitCount(gAreaGsFlags[area]);
+    }
+    static std::vector<RandomizerCheck> heartLocations;
+    if (heartLocations.empty()) {
+        for (const auto& location : Rando::StaticData::GetLocationTable()) {
+            if (location.GetVanillaItem() == RG_PIECE_OF_HEART) heartLocations.push_back(location.GetRandomizerCheck());
+        }
+    }
+    for (const auto check : heartLocations) {
+        const auto* location = Rando::StaticData::GetLocation(check);
+        const auto quest = location->GetQuest();
+        const bool mq = quest != RCQUEST_BOTH && ResourceMgr_IsSceneMasterQuest(location->GetScene());
+        if ((quest == RCQUEST_MQ && !mq) || (quest == RCQUEST_VANILLA && mq)) continue;
+        const int area = TrackerArea(location->GetArea());
+        if (area < 0) continue;
+        ++snapshot[TS_TRACKER + area * 4 + 3];
+        if (HeartLocationCollected(*location)) ++snapshot[TS_TRACKER + area * 4 + 2];
+    }
+}
+
 void PublishSnapshot() {
     std::array<int32_t, THOR_SNAPSHOT_SIZE> s{};
     s[TS_VERSION] = THOR_SNAPSHOT_VERSION;
@@ -450,6 +537,7 @@ void PublishSnapshot() {
     }
 
     PublishMap(s, inGame);
+    PublishCollectibles(s, inGame);
     std::lock_guard<std::mutex> lock(sSnapMutex);
     sSnapshot = s;
 }

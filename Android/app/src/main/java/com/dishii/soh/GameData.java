@@ -207,6 +207,16 @@ public final class GameData {
         return "Test Map";
     }
 
+    // Save-file regions, intentionally combined where the original game shares Skulltula flags.
+    public static final String[] TRACKER_AREAS = {
+        "Deku Tree", "Dodongo's Cavern", "Jabu-Jabu's Belly", "Forest Temple", "Fire Temple",
+        "Water Temple", "Spirit Temple", "Shadow Temple", "Bottom of the Well", "Ice Cavern",
+        "Hyrule Field", "Lon Lon Ranch", "Kokiri Forest", "Lost Woods & Sacred Meadow",
+        "Market & Castle Grounds", "Death Mountain & Goron City", "Kakariko & Graveyard",
+        "Zora's River, Domain & Fountain", "Lake Hylia", "Gerudo Valley", "Gerudo Fortress",
+        "Desert Colossus & Wasteland"
+    };
+
     // ---- File name charset ----
 
     public static char filenameChar(int c) {

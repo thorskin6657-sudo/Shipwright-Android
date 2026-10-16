@@ -16,6 +16,7 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 
 /**
@@ -27,20 +28,20 @@ import android.view.View;
  *           button to assign it, tap equipment to equip, tap a button to use it,
  *           long-press a button to clear it.
  *   QUEST - medallions, stones, songs (tap a song while the ocarina is out to play it).
- *   MAP   - current area, compass heading, dungeon keys/map/compass/boss key table.
+ *   MAP   - live map with zoom/pan. TRACKER - spoiler-free area collectible counts.
  */
 public class ThorScreenView extends View {
 
     // ---- Palette ----
-    private static final int BG_TOP = 0xFF0E1A2B;
-    private static final int BG_BOTTOM = 0xFF07101C;
-    private static final int PANEL = 0xFF13243A;
-    private static final int PANEL_EDGE = 0xFF2C4A6E;
-    private static final int GOLD = 0xFFE8C766;
-    private static final int GOLD_DIM = 0xFF8C7A44;
-    private static final int TEXT = 0xFFEDEFF4;
-    private static final int TEXT_DIM = 0xFF7D8BA0;
-    private static final int SELECT = 0xFF5FD3FF;
+    private static final int BG_TOP = 0xFF183326;
+    private static final int BG_BOTTOM = 0xFF081A13;
+    private static final int PANEL = 0xFF203B2B;
+    private static final int PANEL_EDGE = 0xFF6B7951;
+    private static final int GOLD = 0xFFE7C976;
+    private static final int GOLD_DIM = 0xFF9F8B52;
+    private static final int TEXT = 0xFFF3E9CF;
+    private static final int TEXT_DIM = 0xFFA9B29A;
+    private static final int SELECT = 0xFFA7E28A;
     private static final int C_YELLOW = 0xFFF6D43C;
     private static final int A_BLUE = 0xFF4C8DF6;
     private static final int B_GREEN = 0xFF3FBF5F;
@@ -48,8 +49,8 @@ public class ThorScreenView extends View {
     private static final int HEART_RED = 0xFFE5383B;
     private static final int MAGIC_GREEN = 0xFF2BD96B;
 
-    private static final int TAB_GEAR = 0, TAB_QUEST = 1, TAB_MAP = 2;
-    private static final String[] TAB_NAMES = {"GEAR", "QUEST", "MAP"};
+    private static final int TAB_GEAR = 0, TAB_QUEST = 1, TAB_MAP = 2, TAB_TRACKER = 3;
+    private static final String[] TAB_NAMES = {"GEAR", "QUEST", "MAP", "TRACKER"};
 
     private final ThorState state;
     private final ThorIcons icons;
@@ -65,8 +66,30 @@ public class ThorScreenView extends View {
     private int mapRevision = -1;
     private boolean dungeonTable;
     private final RectF mapToggle = new RectF();
+    private final RectF mapViewport = new RectF();
+    private final RectF[] mapControls = {new RectF(), new RectF(), new RectF()};
+    private final RectF trackerViewport = new RectF();
+    private final ScaleGestureDetector mapScale;
+    private float mapZoom = 1, mapPanX, mapPanY;
+    private float lastTouchX, lastTouchY, trackerScroll;
+    private boolean mapTouch, trackerTouch;
+
+    private void zoomMap(float next, float focusX, float focusY) {
+        next = Math.max(1, Math.min(6, next));
+        float ratio = next / mapZoom;
+        float fx = focusX - mapViewport.centerX(), fy = focusY - mapViewport.centerY();
+        mapPanX = (mapPanX - fx) * ratio + fx;
+        mapPanY = (mapPanY - fy) * ratio + fy;
+        mapZoom = next;
+        if (mapZoom == 1) mapPanX = mapPanY = 0;
+        invalidate();
+    }
 
     public void setMap(Bitmap bitmap, int revision) {
+        if (mapRevision != revision) {
+            mapZoom = 1;
+            mapPanX = mapPanY = 0;
+        }
         mapBitmap = bitmap;
         mapRevision = revision;
     }
@@ -78,7 +101,7 @@ public class ThorScreenView extends View {
     private final RectF header = new RectF();
     private final RectF content = new RectF();
     private final RectF tabBar = new RectF();
-    private final RectF[] tabRects = new RectF[3];
+    private final RectF[] tabRects = new RectF[TAB_NAMES.length];
     private final RectF[] slotRects = new RectF[24];
     private final RectF[][] equipRects = new RectF[4][3];
     private final RectF[] upgradeRects = new RectF[4];
@@ -110,6 +133,12 @@ public class ThorScreenView extends View {
         super(context);
         this.state = state;
         this.icons = icons;
+        mapScale = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            @Override public boolean onScale(ScaleGestureDetector detector) {
+                zoomMap(mapZoom * detector.getScaleFactor(), detector.getFocusX(), detector.getFocusY());
+                return true;
+            }
+        });
         iconPaint.setFilterBitmap(false); // crisp pixel art
         textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
         for (int i = 0; i < tabRects.length; i++) tabRects[i] = new RectF();
@@ -160,8 +189,8 @@ public class ThorScreenView extends View {
         tabBar.set(0, h - tabH, w, h);
         content.set(0, headerH, w, h - tabH);
 
-        float tw = w / 3f;
-        for (int i = 0; i < 3; i++) {
+        float tw = w / (float)TAB_NAMES.length;
+        for (int i = 0; i < TAB_NAMES.length; i++) {
             tabRects[i].set(i * tw + u, tabBar.top + u * 0.8f, (i + 1) * tw - u, tabBar.bottom - u * 0.8f);
         }
         layoutGear();
@@ -238,6 +267,7 @@ public class ThorScreenView extends View {
         paint.setStyle(Paint.Style.FILL);
         c.drawRect(0, 0, w, h, paint);
         paint.setShader(null);
+        drawTriforce(c, getWidth() * 0.5f, header.centerY(), u * 3.2f, 0x24E7C976);
 
         if (!ThorBridge.isAvailable()) {
             drawCentered(c, "Companion bridge not available in this build", h / 2f, u * 4, TEXT_DIM);
@@ -253,6 +283,7 @@ public class ThorScreenView extends View {
             case TAB_GEAR: drawGear(c); break;
             case TAB_QUEST: drawQuest(c); break;
             case TAB_MAP: drawMap(c); break;
+            case TAB_TRACKER: drawTracker(c); break;
         }
         drawTabs(c);
 
@@ -307,7 +338,7 @@ public class ThorScreenView extends View {
             float my = hy0 + hs * 2.3f;
             float mw = u * 0.6f * mcap;
             tmpF.set(hx0, my, hx0 + mw, my + u * 2f);
-            paint.setColor(0xFF203040);
+            paint.setColor(0xFF283D26);
             c.drawRoundRect(tmpF, u, u, paint);
             tmpF.right = hx0 + mw * (state.magic() / (float) mcap);
             paint.setColor(MAGIC_GREEN);
@@ -351,9 +382,9 @@ public class ThorScreenView extends View {
     }
 
     private void drawTabs(Canvas c) {
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < TAB_NAMES.length; i++) {
             boolean on = i == tab;
-            paint.setColor(on ? 0xFF22406A : PANEL);
+            paint.setColor(on ? 0xFF39583A : PANEL);
             c.drawRoundRect(tabRects[i], u * 2, u * 2, paint);
             if (on) {
                 paint.setStyle(Paint.Style.STROKE);
@@ -510,7 +541,7 @@ public class ThorScreenView extends View {
         RectF r = buttonRects[i];
         int color = i == 0 ? B_GREEN : (i <= 3 ? C_YELLOW : D_GREY);
         boolean hot = (dragging && r.contains(dragX, dragY)) || downButton == i;
-        paint.setColor(0xFF0A1420);
+        paint.setColor(0xFF0C2117);
         c.drawOval(r, paint);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(u * (hot ? 1.0f : 0.6f));
@@ -539,7 +570,7 @@ public class ThorScreenView extends View {
         c.drawOval(tmpF, paint);
         textPaint.setTextAlign(Paint.Align.CENTER);
         textPaint.setTextSize(bs * (i == 3 ? 0.46f : 0.55f));
-        textPaint.setColor(0xFF101010);
+        textPaint.setColor(0xFF132016);
         c.drawText(buttonLabel(i), tmpF.centerX(), tmpF.centerY() + bs * 0.2f, textPaint);
         textPaint.setTextAlign(Paint.Align.LEFT);
     }
@@ -635,7 +666,7 @@ public class ThorScreenView extends View {
         RectF r = songRects[i];
         boolean has = state.questItem(GameData.QUEST_SONG_MINUET + i);
         boolean sel = selectedSong == i;
-        paint.setColor(sel ? 0xFF22406A : PANEL);
+        paint.setColor(sel ? 0xFF39583A : PANEL);
         c.drawRoundRect(r, u * 1.4f, u * 1.4f, paint);
         if (sel || (playing && has)) {
             paint.setStyle(Paint.Style.STROKE);
@@ -682,7 +713,7 @@ public class ThorScreenView extends View {
         int color = n == 'A' ? A_BLUE : C_YELLOW;
         paint.setColor(color);
         c.drawCircle(cx, cy, s / 2, paint);
-        paint.setColor(0xFF101010);
+        paint.setColor(0xFF132016);
         float a = s * 0.22f;
         path.reset();
         switch (n) {
@@ -729,15 +760,20 @@ public class ThorScreenView extends View {
             drawDungeonTable(c, top);
             return;
         }
-        RectF card = new RectF(content.left + pad, top, content.right - pad, content.bottom - u * 10);
+        RectF card = new RectF(content.left + pad, top, content.right - pad, content.bottom - pad);
+        mapViewport.set(card);
         drawPanel(c, card);
         if (state.hasLiveMap() && mapBitmap != null && mapRevision == state.mapRevision()) {
             float margin = u * 4;
             float scale = Math.min((card.width() - margin * 2) / mapBitmap.getWidth(),
                     (card.height() - margin * 2) / mapBitmap.getHeight());
-            float width = mapBitmap.getWidth() * scale, height = mapBitmap.getHeight() * scale;
-            RectF map = new RectF(card.centerX() - width / 2, card.centerY() - height / 2,
-                    card.centerX() + width / 2, card.centerY() + height / 2);
+            float width = mapBitmap.getWidth() * scale * mapZoom, height = mapBitmap.getHeight() * scale * mapZoom;
+            float maxX = Math.max(0, (width - card.width()) / 2 + margin);
+            float maxY = Math.max(0, (height - card.height()) / 2 + margin);
+            mapPanX = Math.max(-maxX, Math.min(maxX, mapPanX));
+            mapPanY = Math.max(-maxY, Math.min(maxY, mapPanY));
+            RectF map = new RectF(card.centerX() + mapPanX - width / 2, card.centerY() + mapPanY - height / 2,
+                    card.centerX() + mapPanX + width / 2, card.centerY() + mapPanY + height / 2);
             c.save();
             c.clipRect(card);
             if (state.mapMirrored()) {
@@ -765,7 +801,7 @@ public class ThorScreenView extends View {
             path.close();
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(u * 0.65f);
-            paint.setColor(0xFF07101C);
+            paint.setColor(0xFF081A13);
             c.drawPath(path, paint);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(0xFFCCFF55);
@@ -775,14 +811,79 @@ public class ThorScreenView extends View {
             drawCentered(c, state.hasLiveMap() ? "Loading map…" : "No map for this area",
                     card.centerY(), u * 3.6f, TEXT_DIM, card.centerX());
         }
-        String room = "Room " + state.room();
-        if (GameData.dungeonHasMapCompass(GameData.dungeonForScene(state.scene()))
-                && GameData.dungeonForScene(state.scene()) >= 0) room += "  ·  " + state.mapFloor();
-        if (state.sceneIsMq()) room += "  ·  Master Quest";
-        drawFittedText(c, room, content.left + pad, content.bottom - u * 3.8f,
-                content.width() * 0.62f, u * 3f, TEXT_DIM);
-        drawFittedText(c, "▲ Link", content.right - u * 19, content.bottom - u * 3.8f,
-                u * 17, u * 3f, 0xFFCCFF55);
+        float right = card.right - u * 1.5f;
+        float bottom = card.bottom - u * 1.5f;
+        for (int i = 2; i >= 0; i--) {
+            float width = u * (i == 2 ? 14 : 8);
+            mapControls[i].set(right - width, bottom - u * 7, right, bottom);
+            paint.setColor(0xEE0C2117);
+            c.drawRoundRect(mapControls[i], u * 1.2f, u * 1.2f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(u * 0.2f);
+            paint.setColor(GOLD_DIM);
+            c.drawRoundRect(mapControls[i], u * 1.2f, u * 1.2f, paint);
+            paint.setStyle(Paint.Style.FILL);
+            drawCentered(c, i == 0 ? "−" : i == 1 ? "+" : "Reset",
+                    mapControls[i].centerY() + u, u * (i == 2 ? 2.8f : 4), GOLD, mapControls[i].centerX());
+            right -= width + u;
+        }
+    }
+
+    private void drawTracker(Canvas c) {
+        float pad = u * 2;
+        drawFittedText(c, "COLLECTIBLES", pad, content.top + u * 5.5f,
+                content.width() - pad * 2, u * 4, GOLD);
+        String summary = "Gold Skulltulas " + state.gsTokens() + "/100   ·   Heart pieces "
+                + state.totalHeartPieces() + "/36";
+        drawFittedText(c, summary, pad, content.top + u * 10,
+                content.width() - pad * 2, u * 2.8f, TEXT);
+        float skullX = content.right - u * 28, heartX = content.right - u * 12;
+        drawFittedText(c, "AREA", pad + u, content.top + u * 15, u * 60, u * 2.5f, TEXT_DIM);
+        drawCentered(c, "SKULLS", content.top + u * 15, u * 2.4f, GOLD, skullX);
+        drawCentered(c, "HEARTS", content.top + u * 15, u * 2.4f, GOLD, heartX);
+        trackerViewport.set(content.left + pad, content.top + u * 17, content.right - pad, content.bottom - pad);
+        float rowH = u * 7.8f;
+        trackerScroll = Math.max(0, Math.min(trackerScroll, GameData.TRACKER_AREAS.length * rowH - trackerViewport.height()));
+        c.save();
+        c.clipRect(trackerViewport);
+        for (int i = 0; i < GameData.TRACKER_AREAS.length; i++) {
+            float y = trackerViewport.top + i * rowH - trackerScroll;
+            if (y + rowH < trackerViewport.top || y > trackerViewport.bottom) continue;
+            RectF row = new RectF(trackerViewport.left, y + u * 0.3f, trackerViewport.right, y + rowH - u * 0.3f);
+            paint.setColor(i == state.trackerArea() ? 0xFF39583A : PANEL);
+            c.drawRoundRect(row, u, u, paint);
+            float baseline = row.centerY() + u;
+            drawFittedText(c, GameData.TRACKER_AREAS[i], row.left + u * 1.5f, baseline,
+                    skullX - u * 9 - row.left - u * 2, u * 2.8f, i == state.trackerArea() ? GOLD : TEXT);
+            for (int column = 0; column < 2; column++) {
+                int got = state.tracker(i, column * 2), total = state.tracker(i, column * 2 + 1);
+                String count = total == 0 || (column == 1 && state.randomizedTracker()) ? "—" : got + " / " + total;
+                drawCentered(c, count, baseline, u * 2.8f, total > 0 && got == total ? SELECT : TEXT,
+                        column == 0 ? skullX : heartX);
+            }
+        }
+        c.restore();
+        // A thin scrollbar makes the longer list discoverable without location spoilers.
+        float all = GameData.TRACKER_AREAS.length * rowH;
+        float bar = trackerViewport.height() * trackerViewport.height() / all;
+        float y = trackerViewport.top + trackerScroll / all * trackerViewport.height();
+        paint.setColor(GOLD_DIM);
+        c.drawRoundRect(new RectF(content.right - u, y, content.right - u * 0.5f, y + bar), u * 0.25f, u * 0.25f, paint);
+    }
+
+    private void drawTriforce(Canvas c, float cx, float cy, float size, int color) {
+        paint.setColor(color);
+        float h = size * 0.866f;
+        for (int i = 0; i < 3; i++) {
+            float x = i == 0 ? cx : cx + (i == 1 ? -size / 2 : size / 2);
+            float y = i == 0 ? cy - h : cy;
+            path.reset();
+            path.moveTo(x, y);
+            path.lineTo(x - size / 2, y + h);
+            path.lineTo(x + size / 2, y + h);
+            path.close();
+            c.drawPath(path, paint);
+        }
     }
 
     private void drawDungeonTable(Canvas c, float top) {
@@ -795,7 +896,7 @@ public class ThorScreenView extends View {
             float x = content.left + pad + col * (colW + pad);
             float y = top + row * rowH;
             RectF cell = new RectF(x, y + rowH * 0.06f, x + colW, y + rowH * 0.94f);
-            paint.setColor(d == dungeon ? 0xFF22406A : PANEL);
+            paint.setColor(d == dungeon ? 0xFF39583A : PANEL);
             c.drawRoundRect(cell, u * 1.2f, u * 1.2f, paint);
             drawFittedText(c, GameData.DUNGEON_NAMES[d], x + u * 1.5f, y + rowH * 0.33f,
                     colW - u * 3, rowH * 0.27f, d == dungeon ? GOLD : TEXT);
@@ -896,7 +997,7 @@ public class ThorScreenView extends View {
         tmpF.set(r.left, r.top, r.left + bw, r.top + bh);
         paint.setColor(color);
         c.drawRoundRect(tmpF, bh / 3, bh / 3, paint);
-        textPaint.setColor(0xFF101010);
+        textPaint.setColor(0xFF132016);
         c.drawText(label, r.left + r.width() * 0.05f, r.top + bh * 0.78f, textPaint);
     }
 
@@ -956,11 +1057,13 @@ public class ThorScreenView extends View {
     }
 
     private void drawCentered(Canvas c, String s, float baseline, float size, int color, float cx) {
+        textPaint.setTypeface(Typeface.create("serif", Typeface.BOLD));
         textPaint.setTextAlign(Paint.Align.CENTER);
         textPaint.setTextSize(size);
         textPaint.setColor(color);
         c.drawText(s, cx, baseline, textPaint);
         textPaint.setTextAlign(Paint.Align.LEFT);
+        textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
     }
 
     // ------------------------------------------------------------------ input
@@ -1003,6 +1106,7 @@ public class ThorScreenView extends View {
     @Override
     public boolean onTouchEvent(MotionEvent e) {
         float x = e.getX(), y = e.getY();
+        if (tab == TAB_MAP && !dungeonTable) mapScale.onTouchEvent(e);
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 downX = x;
@@ -1016,17 +1120,33 @@ public class ThorScreenView extends View {
                 downEquipType = -1;
                 downSong = -1;
                 downOcarina = false;
+                mapTouch = trackerTouch = false;
+                lastTouchX = x;
+                lastTouchY = y;
                 if (!state.saveLoaded()) return true;
-                for (int i = 0; i < 3; i++) {
+                for (int i = 0; i < TAB_NAMES.length; i++) {
                     if (tabRects[i].contains(x, y)) {
                         if (tab != i) {
                             tab = i;
+                            if (tab == TAB_TRACKER && state.trackerArea() >= 0) trackerScroll = state.trackerArea() * u * 7.8f;
                             selectedSlot = -1;
                             performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
                             invalidate();
                         }
                         return true;
                     }
+                }
+                if (tab == TAB_TRACKER && trackerViewport.contains(x, y)) {
+                    trackerTouch = true;
+                    return true;
+                }
+                if (tab == TAB_MAP && !dungeonTable) {
+                    for (int i = 0; i < 3; i++) if (mapControls[i].contains(x, y)) {
+                        zoomMap(i == 0 ? mapZoom / 1.5f : i == 1 ? mapZoom * 1.5f : 1,
+                                mapViewport.centerX(), mapViewport.centerY());
+                        return true;
+                    }
+                    mapTouch = mapViewport.contains(x, y);
                 }
                 if (tab == TAB_MAP && mapToggle.contains(x, y)) {
                     dungeonTable = !dungeonTable;
@@ -1060,6 +1180,22 @@ public class ThorScreenView extends View {
                 return true;
 
             case MotionEvent.ACTION_MOVE:
+                if (trackerTouch) {
+                    trackerScroll += lastTouchY - y;
+                    lastTouchY = y;
+                    invalidate();
+                    return true;
+                }
+                if (mapTouch) {
+                    if (e.getPointerCount() == 1 && !mapScale.isInProgress() && mapZoom > 1) {
+                        mapPanX += x - lastTouchX;
+                        mapPanY += y - lastTouchY;
+                    }
+                    lastTouchX = x;
+                    lastTouchY = y;
+                    invalidate();
+                    return true;
+                }
                 dragX = x;
                 dragY = y;
                 if (downSlot >= 0 && !dragging && Math.hypot(x - downX, y - downY) > u * 3) {
@@ -1073,6 +1209,7 @@ public class ThorScreenView extends View {
                 return true;
 
             case MotionEvent.ACTION_UP:
+                mapTouch = trackerTouch = false;
                 handler.removeCallbacks(longPress);
                 onUp(x, y);
                 dragging = false;
@@ -1082,6 +1219,7 @@ public class ThorScreenView extends View {
                 return true;
 
             case MotionEvent.ACTION_CANCEL:
+                mapTouch = trackerTouch = false;
                 handler.removeCallbacks(longPress);
                 dragging = false;
                 downSlot = -1;

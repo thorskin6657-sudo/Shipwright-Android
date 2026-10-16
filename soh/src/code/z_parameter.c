@@ -23,6 +23,7 @@
 #include "soh/Enhancements/randomizer/randomizer_grotto.h"
 #include "soh/OTRGlobals.h"
 #include "soh/ResourceManagerHelpers.h"
+#include "soh/Enhancements/ThorDualScreen/ThorHudLabels.h"
 #include "soh/Enhancements/gameplaystats.h"
 
 #include "message_data_static.h"
@@ -4387,12 +4388,35 @@ void Interface_DrawItemButtons(PlayState* play) {
             const char* cButtonIcons[] = { gButtonBackgroundTex, gEquippedItemOutlineTex, gEmptyCLeftArrowTex,
                                            gEmptyCDownArrowTex, gEmptyCRightArrowTex };
 
+#ifdef __ANDROID__
+            OVERLAY_DISP = Thor_DrawHudLabel(OVERLAY_DISP, temp - 1,
+                ItemIconPos[temp - 1][0], ItemIconPos[temp - 1][1],
+                ItemIconWidthFactor[temp - 1][0], temp == 1 ? interfaceCtx->cLeftAlpha :
+                temp == 2 ? interfaceCtx->cDownAlpha : interfaceCtx->cRightAlpha);
+#else
             OVERLAY_DISP = Gfx_TextureIA8(OVERLAY_DISP, cButtonIcons[(temp + 1)], 32, 32, ItemIconPos[temp - 1][0],
                                           ItemIconPos[temp - 1][1], ItemIconWidthFactor[temp - 1][0],
                                           ItemIconWidthFactor[temp - 1][0], ItemIconWidthFactor[temp - 1][1],
                                           ItemIconWidthFactor[temp - 1][1]);
+#endif
         }
     }
+
+#ifdef __ANDROID__
+    // Equipped item icons occupy the button centers, so keep their labels in small upper badges.
+    const s16 thorPositions[3][2] = {
+        { C_Left_BTN_Pos[0], C_Left_BTN_Pos[1] },
+        { C_Down_BTN_Pos[0], C_Down_BTN_Pos[1] },
+        { C_Right_BTN_Pos[0], C_Right_BTN_Pos[1] }
+    };
+    const s16 thorAlphas[3] = { interfaceCtx->cLeftAlpha, interfaceCtx->cDownAlpha, interfaceCtx->cRightAlpha };
+    for (int i = 0; i < 3; ++i) {
+        if (gSaveContext.equips.buttonItems[i + 1] <= 0xF0 && thorPositions[i][0] > -100 && thorAlphas[i] > 0) {
+            OVERLAY_DISP = Thor_DrawHudLabel(OVERLAY_DISP, i, thorPositions[i][0] + 4,
+                thorPositions[i][1] - 8, 14, thorAlphas[i]);
+        }
+    }
+#endif
 
     CLOSE_DISPS(play->state.gfxCtx);
 }
